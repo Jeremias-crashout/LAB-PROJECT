@@ -1,0 +1,434 @@
+import java.io.*;
+import java.util.InputMismatchException;
+import java.util.Scanner;
+
+// -------------------- Product Class --------------------
+class Product {
+    protected String productId;
+    protected String productName;
+    protected double price;
+    protected int quantity;
+
+    public Product(String productId, String productName, double price, int quantity) {
+        this.productId = productId;
+        this.productName = productName;
+        this.price = price;
+        this.quantity = quantity;
+    }
+
+    public void displayProductInfo() {
+        System.out.println("ID: " + productId + " | Name: " + productName +
+                " | Price: " + price + " | Quantity: " + quantity);
+    }
+
+    // Getters and Setters
+    public String getProductId() { return productId; }
+    public void setProductName(String productName) { this.productName = productName; }
+    public void setPrice(double price) { this.price = price; }
+    public void setQuantity(int quantity) { this.quantity = quantity; }
+
+    // Extra getters for file saving
+    public String getProductName() { return productName; }
+    public double getPrice() { return price; }
+    public int getQuantity() { return quantity; }
+}
+
+// -------------------- PerishableProduct Class --------------------
+class PerishableProduct extends Product {
+    private String expiryDate;
+
+    public PerishableProduct(String productId, String productName, double price, int quantity, String expiryDate) {
+        super(productId, productName, price, quantity);
+        this.expiryDate = expiryDate;
+    }
+
+    @Override
+    public void displayProductInfo() {
+        System.out.println("ID: " + productId + " | Name: " + productName +
+                " | Price: " + price + " | Quantity: " + quantity +
+                " | Expiry: " + expiryDate);
+    }
+
+    public void setExpiryDate(String expiryDate) { this.expiryDate = expiryDate; }
+    public String getExpiryDate() { return expiryDate; }
+}
+
+// -------------------- InventoryManager Class --------------------
+class InventoryManager {
+    private final Scanner sc = new Scanner(System.in);
+    private final Product[] products = new Product[50];
+    private int count = 0;
+    private final String FILE_NAME = "inventory.txt";
+
+    public InventoryManager() {
+        loadFromFile();
+    }
+
+    // ---------- File Handling Methods ----------
+
+    // Save all products to file
+    public void saveToFile() {
+        try (PrintWriter pw = new PrintWriter(new FileWriter(FILE_NAME))) {
+            for (int i = 0; i < count; i++) {
+                Product p = products[i];
+
+                if (p instanceof PerishableProduct pp) {
+                    pw.println("P;" + p.getProductId() + ";" + p.getProductName() + ";" +
+                            p.getPrice() + ";" + p.getQuantity() + ";" + pp.getExpiryDate());
+                } else {
+                    pw.println("N;" + p.getProductId() + ";" + p.getProductName() + ";" +
+                            p.getPrice() + ";" + p.getQuantity());
+                }
+            }
+            System.out.println("Inventory saved to file.");
+        } catch (IOException e) {
+            System.out.println("Error saving file: " + e.getMessage());
+        }
+    }
+
+    // Load products from file
+    public void loadFromFile() {
+        File file = new File(FILE_NAME);
+        if (!file.exists()) {
+            return; // No file yet, nothing to load
+        }
+
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+
+            while ((line = br.readLine()) != null && count < products.length) {
+                String[] parts = line.split(";");
+                if (parts.length < 5) continue; // skip invalid lines
+
+                String type = parts[0];
+                String id = parts[1];
+                String name = parts[2];
+                double price = Double.parseDouble(parts[3]);
+                int quantity = Integer.parseInt(parts[4]);
+
+                if (type.equals("P") && parts.length >= 6) {
+                    String expiry = parts[5];
+                    products[count++] = new PerishableProduct(id, name, price, quantity, expiry);
+                } else if (type.equals("N")) {
+                    products[count++] = new Product(id, name, price, quantity);
+                }
+            }
+            if (count > 0) {
+                System.out.println("Inventory loaded from file.");
+            }
+        } catch (IOException | NumberFormatException e) {
+            System.out.println("Error reading file. Some data may not have been loaded.");
+        }
+    }
+
+    // ---------- Safe Input Methods ----------
+
+    public int safeIntInput(Scanner sc, String message) {
+        while (true) {
+            try {
+                System.out.print(message);
+                int value = sc.nextInt();
+                sc.nextLine(); // consume newline
+                return value;
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid number. Try again.");
+                sc.nextLine(); // clear invalid input
+            }
+        }
+    }
+
+    public double safeDoubleInput(Scanner sc, String message) {
+        while (true) {
+            try {
+                System.out.print(message);
+                double value = sc.nextDouble();
+                sc.nextLine(); // consume newline
+                return value;
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid decimal number. Try again.");
+                sc.nextLine(); // clear invalid input
+            }
+        }
+    }
+
+    // ---------- Helper Methods ----------
+
+    public boolean productExists(String id) {
+        for (int i = 0; i < count; i++) {
+            if (products[i].getProductId().equals(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ---------- CRUD Operations ----------
+
+    public void addProduct(Product p) {
+        if (count < products.length) {
+            products[count] = p;
+            count++;
+            saveToFile();
+            System.out.println("Product added successfully!");
+        } else {
+            System.out.println("Inventory is full!");
+        }
+    }
+
+    public void viewProducts() {
+        if (count == 0) {
+            System.out.println("No products in inventory.");
+            return;
+        }
+        System.out.println("\n----- Product List -----");
+        for (int i = 0; i < count; i++) {
+            products[i].displayProductInfo();
+        }
+        System.out.println("------------------------\n");
+    }
+
+    public void updateProduct() {
+        if (count == 0) {
+            System.out.println("No products in inventory.");
+            return;
+        }
+
+        viewProducts();
+
+        System.out.print("Enter Product ID to update: ");
+        String productId = sc.nextLine().trim();
+
+        if (productId.isEmpty()) {
+            System.out.println("Error: Product ID cannot be empty.");
+            return;
+        }
+
+        int index = -1;
+
+        // Find product index
+        for (int i = 0; i < count; i++) {
+            if (products[i].getProductId().equals(productId)) {
+                index = i;
+                break;
+            }
+        }
+
+        if (index == -1) {
+            System.out.println("Product not found.");
+            return;
+        }
+
+        Product p = products[index];
+        System.out.println("Product found! Enter new details:");
+
+        // Name
+        System.out.print("Enter new name (leave blank to keep current): ");
+        String newName = sc.nextLine();
+        if (!newName.trim().isEmpty()) {
+            p.setProductName(newName);
+        }
+
+        // Price
+        System.out.print("Enter new price (leave blank to keep current): ");
+        String priceInput = sc.nextLine();
+        if (!priceInput.trim().isEmpty()) {
+            try {
+                double newPrice = Double.parseDouble(priceInput);
+                p.setPrice(newPrice);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid price. Update skipped for price.");
+            }
+        }
+
+        // Quantity
+        System.out.print("Enter new quantity (leave blank to keep current): ");
+        String quantityInput = sc.nextLine();
+        if (!quantityInput.trim().isEmpty()) {
+            try {
+                int newQuantity = Integer.parseInt(quantityInput);
+                p.setQuantity(newQuantity);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid quantity. Update skipped for quantity.");
+            }
+        }
+
+        // Expiry for perishable products
+        if (p instanceof PerishableProduct) {
+            System.out.print("Enter new expiry date (YYYY-MM-DD, blank to keep current): ");
+            String expiryInput = sc.nextLine();
+
+            if (!expiryInput.trim().isEmpty()) {
+                if (!expiryInput.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                    System.out.println("Invalid date format. Expiry not updated.");
+                } else {
+                    ((PerishableProduct) p).setExpiryDate(expiryInput);
+                }
+            }
+        }
+
+        saveToFile();
+        System.out.println("Product updated successfully!");
+    }
+
+    public void deleteProduct() {
+        if (count == 0) {
+            System.out.println("No products in inventory.");
+            return;
+        }
+        viewProducts();
+        System.out.print("Enter Product ID to delete: ");
+        String id = sc.nextLine();
+        if (id.trim().isEmpty()) {
+            System.out.println("Error: Product ID cannot be empty.");
+            return;
+        }
+        boolean found = false;
+        try {
+            for (int i = 0; i < count; i++) {
+                if (products[i].getProductId().equals(id)) {
+                    found = true;
+
+                    for (int j = i; j < count - 1; j++) {
+                        products[j] = products[j + 1];
+                    }
+                    products[count - 1] = null;
+                    count--;
+
+                    saveToFile();
+                    System.out.println("Product deleted successfully!");
+                    break;
+                }
+            }
+        } catch (NullPointerException e) {
+            System.out.println("Warning: Product data was incomplete. Delete action failed safely.");
+            return;
+        }
+
+        if (!found) {
+            System.out.println("Product not found.");
+        }
+    }
+
+    public void searchProduct() {
+        if (count == 0) {
+            System.out.println("No products in inventory.");
+            return;
+        }
+
+        System.out.print("Enter Product ID to search: ");
+        String id = sc.nextLine();
+
+        for (int i = 0; i < count; i++) {
+            try {
+                if (products[i].getProductId().equals(id)) {
+                    System.out.println("Product found:");
+                    products[i].displayProductInfo();
+                    return;
+                }
+            } catch (Exception e) {
+                System.out.println("An error occurred while searching. Skipping an invalid entry.");
+            }
+        }
+        System.out.println("Product not found.");
+    }
+}
+
+// -------------------- MainApp Class --------------------
+public class MainApp {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        InventoryManager manager = new InventoryManager();
+        int choice = 0;
+
+        do {
+            System.out.println("======================================");
+            System.out.println("     INVENTORY MANAGEMENT SYSTEM");
+            System.out.println("======================================");
+            System.out.println("1. Add New Product");
+            System.out.println("2. View All Products");
+            System.out.println("3. Update A Product");
+            System.out.println("4. Delete A Product");
+            System.out.println("5. Search For Product By ID");
+            System.out.println("6. Exit");
+            try {
+                System.out.print("Enter your choice: ");
+                choice = sc.nextInt();
+                sc.nextLine(); // clear leftover input
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input! Please enter a NUMBER between 1 and 6.");
+                sc.nextLine(); // clear the wrong input
+                continue;      // restart loop
+            }
+
+            if (choice < 1 || choice > 6) {
+                System.out.println("Invalid choice! Pick a number from 1 to 6.");
+                continue; // restart menu
+            }
+
+            switch (choice) {
+                case 1:
+                    System.out.print("Enter Product ID: ");
+                    String id = sc.nextLine();
+                    if (id.trim().isEmpty()) {
+                        System.out.println("Error: Product ID cannot be empty.");
+                        break;
+                    }
+
+                    if (manager.productExists(id)) {
+                        System.out.println("Error: Product ID already exists.");
+                        break;
+                    }
+
+                    System.out.print("Enter Product Name: ");
+                    String name = sc.nextLine();
+
+                    double price = manager.safeDoubleInput(sc, "Enter Price: ");
+                    int quantity = manager.safeIntInput(sc, "Enter Quantity: ");
+
+                    System.out.print("Is this a perishable product? (yes/no): ");
+                    String isPerishable = sc.nextLine();
+
+                    if (isPerishable.equalsIgnoreCase("yes")) {
+                        System.out.print("Enter Expiry Date (YYYY-MM-DD): ");
+                        String expiry = sc.nextLine();
+                        if (!expiry.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                            System.out.println("Invalid date format! Use YYYY-MM-DD.");
+                            break;
+                        }
+                        PerishableProduct pp = new PerishableProduct(id, name, price, quantity, expiry);
+                        manager.addProduct(pp);
+                    } else {
+                        Product p = new Product(id, name, price, quantity);
+                        manager.addProduct(p);
+                    }
+                    break;
+
+                case 2:
+                    manager.viewProducts();
+                    break;
+
+                case 3:
+                    manager.updateProduct();
+                    break;
+
+                case 4:
+                    manager.deleteProduct();
+                    break;
+
+                case 5:
+                    manager.searchProduct();
+                    break;
+
+                case 6:
+                    System.out.println("Exiting program... Goodbye!");
+                    break;
+
+                default:
+                    System.out.println("Invalid choice. Try again.");
+            }
+
+        } while (choice != 6);
+
+        sc.close();
+    }
+}
